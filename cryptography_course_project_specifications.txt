@@ -1,0 +1,440 @@
+/*************************/
+/******** PROJECT ********/
+/***** SPECIFICATIONS ****/
+/** CRYPTOGRAPHY COURSE **/
+/*************************/
+
+* PROJECT GOALS
+  
+  Implement two executables/programs, "Client" and "Server", which simulate on a single PC an encrypted communication between a client and a server (respectively C and S).
+  
+  The channel to be used by C and S must be a pair of named pipes called "sc.fifo" and "cs.fifo".
+  The C code which implement the connection and the communication between the two processes is given. 
+  The student is requested to implement the cryptographic functions and to integrate them with the given C code. The final project must be written exclusively in C language.
+
+* PROTOCOL 
+  The two executables "Server" and "Client" must follow a given PROTOCOL and thus be able to:
+   - communicate to each other on a public/not-secure CHANNEL (two named pipes) 
+     Remark: the operation over the channel are "WRITE" to send something on the channel, "READ" to receive something from the channel 
+   - read information from two distinct FOLDERS, "client_folder" and "server_folder" 
+     Remark: when server or client access to their folders, we say "GET" and "PUT"
+   - agree on a cipher suite  
+   - communicate using the primitives listed in the cipher suite.
+   Very important note! Messages must have a precise MESSAGE STRUCTURE, defined later.
+
+   The programs/agreement must follow the following protocol:
+ 
+   CONNECTION
+   - the Server starts in idle(listening) mode
+   - the Client contacts the Server (connects to his channel)
+
+   AUTHENTICATION
+   SERVER AUTHENTICATION
+   - the Client challenges the Server:
+      + C GETs the public rsa64 key of S, (s_puk,n)
+      + C creates a pseudo-random message r
+      + C encrypts r using s_puk -> c = r^(s_puk) mod n
+      + C WRITEs c to S
+      + S READs c from S
+      + S GETs its own rsa64 private key, (s_prk,n)
+      + S decrypts c using his private key, s_prk -> r' = c^(s_prk) mod n
+      + S WRITEs r' to C
+      + C checks r' = r: if true then S is authenticated by C, otherwise C interrupts the communication
+
+   CLIENT AUTHENTICATION
+   - the Client request the access to the Server, specifying its identity 
+     (each client will be identified by a string of char, 
+     defined as one of the arguments at execution time)
+      + C WRITEs his name nm to S
+      + S READs the name nm of C
+   - the Server challenges the Client:
+      + S GETS the public rsa64 keys of the possible clients associated to each name, (names[],c_puk[],n[])
+      + S extracts from (names[],c_puk[],n[]) the pair (c_puk[i],n[i]) where names[i] = nm
+      + S creates a pseudo-random message r
+      + S encrypts r using s_puk[i] -> c = r^(s_puk[i]) mod n[i]
+      + S WRITEs c to C
+      + C READs c from S
+      + C GETS its own rsa64 secret key, (c_prk,n) // note: it must be that n = n[i]
+      + C decrypts c using (c_prk,n) -> r' = c^(c_prk) mod n
+      + C WRITEs r' to S
+      + S READ R' from C
+      + S checks r' = r: if true then C is authenticated by S, otherwise S interrupts the communication
+   
+   NEGOTIATION OF THE CIPHER SUITE
+   - the Client and the Server must "negotiate" a cipher suite
+      + C WRITEs his cipher suite list (read from a file) to S 
+      + S READS the cipher suite of C
+      + S searches for the cipher suite of C in a file containing the list of his cipher suites. If match is found then S and C start to use the matching cipher suite, otherwise S returns an error and closes the connection. Any cipher suite contains
+         % one block/stream cipher
+         % one hash function
+         % one public key protocol
+
+   NEGOTIATION OF A PRIVATE KEY
+   - the Client and Server negotiate a private key k using the chosen public key crypto system (RSA64 or RSA512)
+      + S GETS C public key (c_puk_<dim>[i],n[i]) of the right dimension specified in the cipher suite.
+      + S generates a random number key k of size b (either b=24, if BunnyCBC is used, or b=64, if stream cipher are used)
+      + S encrypts k: h = k^(c_puk_<dim>[i]) mod n[i]
+      + S WRITEs h to S
+      + C READs h from S
+      + C decrypts h using its own private rsa<dim> key (c_prk,n): k' = h^(c_prk) mod n
+
+   ENCRYPTED COMMUNICATION
+   - C GETs a message m (from a file)
+   - C encrypts and sends m to S using the chosen private key crypto system
+      + C encrypts m using the chosen cipher B with the private key k' -> c = B(m,k')
+      + (INTEGRITY OF THE MESSAGE) C attaches to c the hash of m -> g = Hash(m)
+      + C WRITEs (c,g) to S
+      + S READs (c,g) from C
+   - the Server decrypts the Client message using the chosen private key crypto system
+      + S decrypts m' = B^(-1)(c,k)
+      + (INTEGRITY OF THE MESSAGE) S checks if g = Hash(m'). 
+        If true proceed, if false WRITE to C "CORRUPTED MESSAGE RECEIVED!" and close the connection
+      + S PUTs m' on a file 
+      + S WRITEs "MESSAGE RECEIVED AND DECRYPTED!" if decryption and integrity control went ok, otherwise 
+      + C READs whatever is the message from S... and proceed to close the connection
+ 
+   DISCONNECTION
+   - the Client closes the connection
+   - the Server enters again idle mode
+
+* MESSAGE STRUCTURE:
+  Each message M which is written on the channel must be divided in two parts in the following order:
+  M = (D,W), where:
+  - D, always two bytes long, indicates the length of W, the second part of the message
+  - W, of length at most 256 bytes, are the actual words that are sent.
+  This division is performed inside the WRITE and READ functions.
+
+* CHANNEL
+  The channel will be two named pipes called:
+    + "cs.fifo", where the client write to the server and the server reads from the client, and 
+    + "sc.fifo", where the server write to the client and the client reads from the server. 
+  The name of the channels are input parameter of the two executables.
+  Messages in the channel are in the form of char string.
+  - In the case of alphanumeric messages (in the case of: the name of the server, connection messages, choice of the cipher suite,...) as "ciao", 
+    then the char string "ciao" is passed to the write_msg() function.
+  - In the case of hexadecimal messages (in the case of: keys, integers, encrypted messages,...) as "a1",
+    then the char string "a1" is passed to the write_msg() function.
+
+* FOLDERS/TEST VECTORS
+  
+  To negotiate the cipher suite we use the following convention, assigning a number to each cryptographic primitive:
+  1 -> BUNNY24 (this means encryption is done using Bunny24 in CBC mode)
+  2 -> ALL5 (this means encryption is done by xoring the message with ALL5 keystream)
+  3 -> MAJ5 (this means encryption is done by xoring the message with MAJ5 keystream)
+  4 -> SPONGEBUNNY
+  5 -> 
+  6 -> RSA512
+
+  So the possible cipher suites are:
+  A: 1,4,5
+  B: 1,4,6
+  C: 2,4,5
+  D: 2,4,6
+  E: 3,4,5
+  F: 3,4,6
+
+  - The folder "client_folder" must contain:
+    + 1 file "client_cipher_suite.txt" containing his cipher suite (composed by only three primitives, a block/stream cipher, a hash function, a public cipher) represented by one of the letters: A, B, C, D, E, F.
+      Example file:
+      ----------------------
+      A
+      ----------------------
+
+    + 1 file "client_sym_private_key.txt"  // not used
+      The key must be in hexadecimal characters and it is interpreted as hexadecimal characters.
+      Ex: F2 is the key 11110010
+      Example file:
+      ----------------------
+      F2
+      ----------------------
+
+    + 1 file "client_message.txt" containing the message we want to send.
+      The message is a string of char of at most 1024 bits. So "ciao" must be interpreted as its ASCII code when encrypted:
+      Ex: "100" = (100)dec = (313030)hex = (0011 0001  0010 0000  0010 0000)bin, which is the message to be sent
+          "ciao" = (99 105 97 111)dec = (63 69 61 6F)hex = (0110 0011  0110 1001  0110 0001  0110 1111)bin, 
+          which is the message to be sent
+      Example file:
+      ----------------------
+      ciao
+      ----------------------
+    
+    + 1 file "client_rsa64_private_key.txt"
+      The key must be in hexadecimal characters and it is interpreted as hexadecimal characters.
+      In this example is represented as integer to show you the computations.
+      Example file:
+      ----------------------
+      77,37
+      ----------------------
+    + 1 file "client_rsa64_public_key.txt"
+      The key must be in hexadecimal characters and it is interpreted as hexadecimal characters.
+      In this example is represented as integer to show you the computations.
+      Example file:
+      ----------------------
+      77,13
+      ----------------------
+    + 1 file "server_rsa64_public_key.txt"
+      The key must be in hexadecimal characters and it is interpreted as hexadecimal characters.
+      In this example is represented as integer to show you the computations.
+      ----------------------
+      33,7
+      ----------------------
+    + 1 file "client_rsa512_private_key.txt"
+    + 1 file "client_rsa512_public_key.txt"
+    + 1 file "server_rsa512_public_key.txt"
+
+  - The folder "server_folder" must contain:
+      The key must be in hexadecimal characters and it is interpreted as hexadecimal characters.
+      In this example is represented as integer to show you the computations.    
+    + 1 file "clients_rsa64_public_keys.txt"
+      Example file:
+      ----------------------
+      Pippo  77 13
+      Pluto  .. ..
+      ...
+      ----------------------
+
+    + 1 file "server_rsa64_private_key.txt"
+      The key must be in hexadecimal characters and it is interpreted as hexadecimal characters.
+      In this example is represented as integer to show you the computations.
+      Example file:
+      ----------------------
+      33,3
+      ----------------------
+    + 1 file "server_rsa64_public_key.txt"
+      Example file:
+      ----------------------
+      33,7
+      ----------------------
+    + 1 file "clients_rsa512_public_keys.txt"
+    + 1 file "server_rsa512_private_key.txt"
+    + 1 file "server_rsa512_public_key.txt"
+
+    + 1 file "server_cipher_suite_list.txt" containing the list of enciphering functions available from the server
+      Example file:
+      ----------------------
+      A,B,C,D,E,F
+      ---------------------- 
+    
+    + 1 file "server_sym_private_key.txt" (similar to client's) // not used
+
+    + 1 file "received_messages.txt" to store all messages received from clients
+   
+   NOTE: all the keys are generated by the students integer pseudorandom generator and the prime pseudorandom generator.
+
+* FUNCTIONS SPECIFICATIONS
+  More informations on this functions are given in the "LESSON_ASSIGNMENTS.txt" file, 
+  while the list of all needed functions is in "needed_functions.txt"
+
+  - Bunny24()
+    INPUT: message (24 bits), key (24 bits)
+    OUTPUT: enciphered_message
+
+  - BunnyCBC()
+    INPUT: message (any bit length up to 2048 bits), key (24 bits)
+    OUTPUT: enciphered_message
+
+  - ALL5() 
+    INPUT: message (any bit length up to 2048 bits), key (64 bits)
+    OUTPUT: enciphered_message
+
+  - MAJ5()
+    INPUT: message (any bit length up to 2048 bits), key (64 bits)
+    OUTPUT: enciphered_message
+
+  - SPONGEBUNNY()
+    INPUT: message (any bit length up to 2048 bits), key (optional)
+    OUTPUT: hashed_message (160 bits)
+
+  - PseudoRandomGenerator()
+    Specifications of this function are up to the students.
+
+  - PseudoRandomPrimeGenerator()
+    Specifications of this function are up to the students.
+
+  NOTE: BunnyCBC(), ALL5() and MAJ5() are used to encrypt and decrypt messages, 
+        so the inverse of those functions has to be implemented (and thus also Bunny24 inverse is needed).
+
+* EXAMPLE OF COMMUNICATION
+  In this example the Server is in idle mode, when contacted by the Client the following steps are done:
+  - the Server challenges the Client using Server rsa public key, 
+  - the Server and the Client agree on a cipher suite, 
+  - the Server and the Client negotiate a private key using the selected public crypto system 
+  - the Client sends an enciphered message with an integrity message to the Server
+  - the Server decrypts the message sent by the Client and verifies the integrity of the message
+
+  The symbol "//" indicates comments which are not displayed on the terminal screen.
+  The symbol "$" indicates that the program is doing operations which are not included in the conversation.
+  All lines beginning with no symbols are all messages displayed on the UNSECURE CHANNEL!!
+  NOTE: here the keys are displayed as decimal number to show the students the details of the computation where possible.
+        Keys are stored in the files as hexadecimal strings representing the actual value in memory.
+        While messages are stored in the files as string of char to be interpreted as ASCII characters when encrypted.
+
+/************************************************************************/
+
+SERVER TERMINAL:
+sc.fifo: in this channel S WRITES
+cs.fifo: in this channel S READS
+
+// Create connection
+  S  reads: Hello
+  S writes: OK
+
+// Client challenges the server
+  S  reads: 27
+    $ S gets its own private RSA64 key (n,d) = (33,3) 
+      from the file "server_rsa64_private_key.txt"
+    $ S decrypts the received encrypted message c = 27
+      - r' = c^d mod n = 27^3 mod 33 = 15
+  S writes: 15
+
+// Server challenges the client
+  S  reads: Pippo
+    $ S gets C public RSA64 key (n,e) = (77,13) from "clients_rsa64_public_keys.txt"
+    $ S creates a pseudorandom message r = 20
+    $ S encrypts r using RSA64 protocol:
+      - c = r^e mod n = 20^51 mod 77 = 69
+  S writes: 69
+  S  reads: 20
+    $ S checks that the last message received equals r
+      - if message equals r then keep connection
+      - otherwise close connection
+
+// Negotiation of the cipher suite
+  S writes: Ready to receive your cipher suite list
+  S  reads: A
+    $ S checks if the cipher suite A is in the file "server_cipher_suite_list.txt"
+      - if the sequence is in the file keep connection
+      - otherwise close connection
+
+// Negotiation of the private key
+  // The server sends an encrypted private key using the chosen public key crypto system (either RSA64 or RSA512)
+  // if the choosen cipher is Bunny24CBC then a 24-bit key must be negotiated
+  // otherwise, if stream ciphers are used, a 64-bit key must be negotiated
+  // suppose cipher suite A is choosen
+    $ S generates a symmertic key k = <k> of 24 bits (<x> indicates the value contained in x)
+      using the integer pseudorandom generator
+    $ S gets clients RSA64 public key (n,e)
+      from the file "clients_rsa64_public_keys.txt"
+    $ S encrypts its private key k = <k>
+      - h = k^e mod n
+  S writes: <h>
+
+// Encrypted communication
+  S  reads: <c><g>
+    $ S decrypt c using the key k
+      m' = B^-1(c,k)
+    $ S computes the hash of m'
+      g' = Hash(m')
+      if g' = g then S puts the message m' in the file "received_messages.txt"
+      else S writes an error message "CORRUPTED MESSAGE RECEIVED" and closes the connection
+
+// Disconnection
+  S writes: BYE
+    $ S remains in idle mode
+
+CLIENT TERMINAL:
+cs.fifo: in this channel C WRITES
+sc.fifo: in this channel C READS
+
+// Create connection
+  C writes: Hello
+  C  reads: OK
+
+// Client challenges the server
+    $ C gets S public RSA64 key (n,e) = (33,7) from "server_rsa64_public_key.txt£
+    $ C creates a pseudorandom message r = 15
+    $ C encrypts r using RSA64 protocol:
+      - c = r^e mod n = 15^7 mod 33 = 27
+  C writes: 27
+  C  reads: 15
+    $ C checks that the last message received equals r
+      - if message equals r then keep connection
+      - otherwise close connection
+
+// Server challenges the client
+  C writes: Pippo
+  C  reads: 76
+    $ C gets its own private RSA64 key (n,d) = (77,37) 
+      from the file "client_rsa64_private_key.txt"
+    $ C decrypt the received encrypted message c = 69
+      - r' = c^d mod n = 69^37 mod 77 = 20 
+  C writes: 20
+
+// Negotiation of the cipher suite
+  C  reads: Ready to receive your cipher suite list
+  C writes: A
+
+// Negotiation of the private key
+  C  reads: <h>
+    $ C gets its own private RSA64 key (n,d)
+      from the file "client_rsa64_private_key.txt"
+    $ C decrypts <h> 
+      - k' = h^d mod n
+
+// Encrypted communication
+    $ C gets the message m = "ciao" 
+      from the file "client_message.txt"
+    $ C encrypt m using the chosen symmetric crypto system B with the key k'
+      c = B(m,k')
+    $ C computes the hash of the message m
+      g = Hash(m)
+  C writes: <c><g>
+    //the two messages are simply concatenated
+
+// Disconnection
+  C  reads: BYE
+    $ C closes the connection
+
+/************************************************************************/
+
+The Block ciphers in use are:
+1) BUNNY24
+
+The Stream ciphers in use are:
+1) MAJ5
+2) ALL5
+
+The hash function in use is:
+1) SPONGEBUNNY
+
+
+Description
+MAJ5
+- NR REGISTERS:     Five LFSR
+    Polynomials: 
+    p = x^19 + x^18 + x^17 + x^14 + 1 ; // same as A5/1
+    p = x^22 + x^21 + 1 ;               // same as A5/1
+    p = x^23 + x^22 + x^21 + x^8 + 1 ;  // same as A5/1
+    p = x^11 + x^2 + 1 ;
+    p = x^13 + x^4 + x^3 + x + 1 ;
+    Tap Positions (counting from 1):
+    9
+    11
+    11
+    5 
+    7
+- Key/Frame LOADING as A5/1
+- UPDATE FUNCTION:  majority function 
+- OUTPUT FUNCTION:  XOR of all registers
+
+ALL5
+- NR REGISTERS:     Five LFSR
+    Polynomials: 
+    p = x^19 + x^18 + x^17 + x^14 + 1 ; // same as A5/1
+    p = x^22 + x^21 + 1 ;               // same as A5/1
+    p = x^23 + x^22 + x^21 + x^8 + 1 ;  // same as A5/1
+    p = x^11 + x^2 + 1 ;
+    p = x^13 + x^4 + x^3 + x + 1 ;
+    Tap Positions (counting from 1):
+    9
+    11
+    11
+    5 
+    7
+- Key/Frame LOADING as A5/1
+- UPDATE FUNCTION:  majority function(or all registers move... to be decided)
+- OUTPUT FUNCTION:  semi-bent, balanced Boolean function 
+                  f: (F_2)^5          -> F_2
+                     (x1,x2,x3,x4,x5) -> x1*x4 + x2*x3 + x2*x5 + x3*x5
+
+

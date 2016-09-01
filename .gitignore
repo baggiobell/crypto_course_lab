@@ -1,0 +1,10 @@
+*~
+*.o
+client
+server
+
+*.fifo
+
+report.aux
+report.log
+report.pdf

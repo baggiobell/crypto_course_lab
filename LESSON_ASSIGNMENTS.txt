@@ -1,0 +1,287 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+LESSON_01 - 2013-10-04 - Introduction to the project
+---------
+
+- read and study the specifications of the project
+- become confidential with the C code for the communication 
+  + read and understand the files:
+    server.c
+	client.c
+	common.h
+	common.c
+  + use of the functions "write_msg()" and "read_msg()"
+- create "client_folder" and "server_folder" with some ".txt" file in it
+- write the C code (using also write_msg() and read_msg() function) to:
+  + get data from the .txt files in the two folders
+  + write data on the channel
+  + read data from the channel
+- correct bugs of the given C code!
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+LESSON_02  - 2013-10-10 - Field operations
+---------
+
+- Implement the following functions:
+  + Sum() 
+    // perform the sum of two polynomial with coefficients over F_2
+	INPUT:  n (integer)
+	        a,b (two polynomials of degree less than n)
+  OUTPUT: c
+	NOTE: the polynomials can be seen as array of n bits
+  + Product() 
+    // perform the product of two polynomials (with coefficients over F_2)
+    // modulo a "special" polynomial, the field polynomial
+	INPUT:  p (the field polynomial, an irreducible polynomial of degree n over F_2)
+	        a,b (two polynomials of degree less than n)
+  OUTPUT: c
+	NOTE: the polynomials can be seen as array of n bits
+  + Rotate()
+    // rotate an array of bits by t bits
+	INPUT:  v (array of n bits)
+	        t (number of bits we need to rotate, if d>0 rotate to the right,if d<0 to the left)
+  OUTPUT: w (v rotated by t bits)
+
+  EX:
+  ---
+    Since the function Sum, Product, and Rotate will be used for fields with 
+    at most 8 bits you could use uint8_t as basic type. 
+    Your choice can though be different, you need just to remember that the 
+    messages sent on the channel will be array of uint8_t.
+
+    /* Add two numbers in a finite field of at most 8 bits */
+    uint8_t Sum(uint8_t a, uint8_t b) {
+      /* ... */
+    }
+
+    /* Multiply two numbers in the finite field defined
+     *  * by the polynomial poly (EX: x^6 + x^4 + x^3 + x + 1, 
+     *  * irreducible in GF(2^6))                             
+     */
+    uint8_t Product(uint8_t a, uint8_t b, uint8_t n, uint8_t poly) {
+      /* ... */
+    }
+
+    /* rotate to the right */
+    uint8_t Rotate(uint8_t a, uint8_t n) {
+      /* ... */
+    }
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  	
+LESSON_03 - 2013-10-18 - LFSR and Toy cipher
+---------
+
+(IGNORE THE PART REGARDING A5/1 AND THE LOADING... WILL DO IT NEXT LECTURE)
+- Implement a linear feedback shift register:
+  + LFSR()
+  INPUT:  p (poynomial in the vector form, indicating tap positions)
+          (if p = x^3 + x^2 + x^0 then we have the following LFSR: )
+          (                                                        )   
+          (    x^0  x^1__x^2__x^3_                                 )
+          (    /-->|____|____|____|                                )
+          (    |           |    |                                  )
+          (    \-----------+----/                                  )
+          (                                                        )
+ 
+          s (initial state vector)
+          n (output stream length, i.e. number of bits to output)
+  OUTPUT: l (string of n bits)
+
+* Exercise:
+Find the period of the following polynomials:
+- x^3 + x^2 + x + 1
+- x^3 + x^2 + 1
+- x^5 + x^3 + 1
+- x^5 + x^3 + x + 1
+
+- Implement the three following functions 
+  (taking same input and returning same output types):
+  + A5/1(k,n)
+  + MAJ5(k,n)
+  + ALL5(k,n)
+
+  INPUT:  k (key of 64 bits)
+          n (length of the output stream)
+  OUTPUT: s (stream of n bits)
+  We will suppose f, the frame vector, fixed:
+  f = 0010 1100 1000 0000 0000 00
+
+  Stream Ciphers Description:
+  MAJ5
+  - NR REGISTERS:     Five LFSR
+      Polynomials: 
+      p = x^19 + x^18 + x^17 + x^14 + 1 ; // same as A5/1
+      p = x^22 + x^21 + 1 ;               // same as A5/1
+      p = x^23 + x^22 + x^21 + x^8 + 1 ;  // same as A5/1
+      p = x^11 + x^2 + 1 ;
+      p = x^13 + x^4 + x^3 + x + 1 ;
+      Clock Positions (counting from 1):
+      9
+      11
+      11
+      5 
+      7
+  - Key/Frame LOADING as A5/1
+  - Warm-up as A5/1
+  - UPDATE FUNCTION:  majority function 
+  - OUTPUT FUNCTION:  XOR of all registers
+
+  ALL5
+  - NR REGISTERS:     Five LFSR
+      Polynomials: 
+      p = x^19 + x^18 + x^17 + x^14 + 1 ; // same as A5/1
+      p = x^22 + x^21 + 1 ;               // same as A5/1
+      p = x^23 + x^22 + x^21 + x^8 + 1 ;  // same as A5/1
+      p = x^11 + x^2 + 1 ;
+      p = x^13 + x^4 + x^3 + x + 1 ;
+
+  - Key/Frame LOADING as A5/1 
+  - Warm-up as A5/1, but NO irregular clocking
+  - UPDATE FUNCTION:  all registers move
+  - OUTPUT FUNCTION:  semi-bent, balanced Boolean function 
+                      f: (F_2)^5          -> F_2
+                         (x1,x2,x3,x4,x5) -> x1*x4 + x2*x3 + x2*x5 + x3*x4
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+LESSON_04 - 2013-10-25 - Stream cipher: A5/1, ALL5, MAJ5
+---------
+
+- Implement A5/1
+  (check http://www.youtube.com/watch?v=LgZAI3DdUA4)
+- Add the key and frame loading  and the warm-up of ALL5 and MAJ5
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+LESSON_05 - 2013-11-08 - Block Ciphers: BunnyTn24
+---------
+
+- Implement BunnyTn() functions to encrypt a message of 24 bits:
+  + BunnyTn()
+  INPUT:  k (key of 24 bits)
+	        m (message of 24 bits)
+  OUTPUT: c (ciphertext of 24 bits)
+  
+  You will need also to implement the following funtions:
+  + Sbox1()
+  + Sbox2()
+  + Sbox3()
+  + Sbox4()
+  INPUT:  v (vector of 6 bits)
+  OUTPUT: w (vector of 6 bits)
+  
+  + Sbox()
+  Applies the 4 Sboxes in parallel.
+  INPUT:  v (vector of 24 bits)
+  OUTPUT: w (vector of 24 bits)
+
+  + MixingLayer()
+  INPUT:  v (vector of 4 words of 6 bits each, or vector of 24 bits)
+  OUTPUT: w (vector of 4 words of 6 bits each, or vector of 24 bits)
+  
+  + RoundFunction()
+  INPUT:  v (vector of 24 bits)
+  OUTPUT: w (vector of 24 bits)
+  
+  + KeySchedule()
+  INPUT:  k (k of 24 bits)
+  OUTPUT: rk[] (array of 16 round keys of 24 bits each)
+
+- Implement BunnyTnInverse(), 
+  which is the function to decrypt messages encrypted by BunnyTn()
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+LESSON_06 - 2013-11-15 - Modes of operation and random generators
+---------
+
+- Implement a function (and its inverse) to encrypt in Cipher-Block Chaining mode:
+  + BunnyCBC()
+  INPUT:  n  (the length of the vector)
+          m  (a vector of n bits)
+          iv (inizialization vector of 24 bits)
+          k  (the key, a vector of 24 bits)
+  OUTPUT: c  (encrypted message of n bits)
+
+- Implement two pseudrandom integer generators:
+  Part of the assignement is how to choose and how to manage the seed.
+
+  *ATTENTION*: 
+    it will be asked in the final report to motivate your choices
+    and in which part of the protocol each of the generator is used.
+
+  1 - FastPseudorandomIntegerGenerator()
+      Must be fast and must generate random bits with good statistical properties.
+      It is NOT requested that from the output bits the initial state cannot be 
+      recovered.
+
+  2 - SecurePseudoRandomIntegerGenerator()
+      Must be secure and must generate random bits with good statistical properties.
+      It IS requested that from the output bits the initial state cannot be 
+      recovered.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+LESSON_07 - 2013-11-22 - Hash function: Sponge
+---------
+
+- Implement the following function
+  + SPONGEBUNNY(m)
+  INPUT:  m (input message of any length)
+  OUTPUT: digest (160 bit string, representing the hash of m)
+  A description and a scheme of the sponge construction can be found at:
+  sponge.noekeon.org
+  The permutation f to be used is BunnyTn(m,k,15) 
+  with k = (111...11) in the case of unkeyed hash.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+LESSON_08 - 2013-11-29 - OpenSSL 
+---------
+
+- Install OPENSSL library if not present in you Linux distribution.
+  check:
+  http://www.openssl.org/docs/crypto/bn.html
+  for a brief description of the library.
+  And take a look at the file
+  ssl.c
+  in the Test_Vectors folder for some examples.
+
+- Implement a pseudorandom prime number generator.
+  A library to test primality can be used
+  (check also
+  http://linux.die.net/man/3/bn_is_prime
+  for the command to test primality),
+  but the algorithm to generate the
+  prime number must be original (it will be taken into account for the exam).
+  
+  PseudoRandomPrimeGenerator(s,sb)
+    INPUT:  s (seed, integer of 32 bits)
+            b (integer representing the length in bits of the generated prime)
+    OUTPUT: p (prime integer of b bits)
+
+- Implement Server-Client Authentication using RSA protocol.
+  RSA private and public key for the authentication must be of 512 bits, 
+  (long long integer should be sufficient).
+  The choice of the key is up to the student.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+LESSON_09 - 2013-12-06 - Finish project and exam assignment
+---------
+
+/* ... */
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+LESSON_10 - 2013-12-13 -
+---------
+
+/* LAB Exam */ 
+- Individual report on the group project
+- Individual implementation of the exam assignement
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
