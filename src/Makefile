@@ -21,5 +21,7 @@ keys: $(LIB_OBJS) keys.o
 
 clean:
 	rm -f $(CLIENT_OBJS) $(SERVER_OBJS) server client
+	rm -f keys.o keys
 	rm -f square_attack.o sqrattack
 	rm -f cs.fifo sc.fifo
+	rm -f server_folder/received_messages.txt
