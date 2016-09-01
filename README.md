@@ -24,5 +24,6 @@ To make it work:
 - run the command
     ./client
 
-
-
+To remove all unneeded files run the command
+- run the command
+    make clean
